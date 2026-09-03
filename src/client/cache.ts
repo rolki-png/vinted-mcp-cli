@@ -20,9 +20,9 @@ export class TtlCache<K, V> {
     return e.value;
   }
 
-  set(key: K, value: V): void {
+  set(key: K, value: V, ttlMs?: number): void {
     if (this.map.has(key)) this.map.delete(key);
-    this.map.set(key, { value, expiresAt: Date.now() + this.ttlMs });
+    this.map.set(key, { value, expiresAt: Date.now() + (ttlMs ?? this.ttlMs) });
     if (this.map.size > this.maxSize) {
       const oldest = this.map.keys().next().value as K;
       this.map.delete(oldest);

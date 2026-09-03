@@ -190,13 +190,13 @@ const TOOLS = [
   },
 ];
 
-function makeServer(): Server {
+function makeServer(sharedClient?: VintedClient): Server {
   const server = new Server(
     { name: 'vinted-cli', version: '1.0.0' },
     { capabilities: { tools: {} } },
   );
 
-  let client: VintedClient | null = null;
+  let client: VintedClient | null = sharedClient ?? null;
   const getClient = () => (client ??= new VintedClient());
 
   server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: TOOLS }));
@@ -264,11 +264,12 @@ async function startHttp() {
   const host = process.env.VINTED_MCP_HOST ?? '127.0.0.1';
   const path = process.env.VINTED_MCP_PATH ?? '/mcp';
 
+  const httpClient = new VintedClient();
   const httpServer = createServer(async (req, res) => {
     if (!req.url || !req.url.startsWith(path)) {
       res.statusCode = 404; res.end('Not Found'); return;
     }
-    const server = makeServer();
+    const server = makeServer(httpClient);
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
     res.on('close', () => { transport.close().catch(() => {}); server.close().catch(() => {}); });
     await server.connect(transport);

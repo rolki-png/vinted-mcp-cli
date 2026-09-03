@@ -14,8 +14,8 @@ import { printOutput } from './format.js';
 
 type OutputFormat = 'json' | 'table';
 
-function client(opts: { proxy?: string; noCache?: boolean }) {
-  return new VintedClient({ proxyUrl: opts.proxy, cacheTtlMs: opts.noCache ? 0 : undefined });
+function client(opts: { proxy?: string; cache?: boolean }) {
+  return new VintedClient({ proxyUrl: opts.proxy, cacheTtlMs: opts.cache === false ? 0 : undefined });
 }
 
 function out(x: unknown, fmt: OutputFormat = 'json') {

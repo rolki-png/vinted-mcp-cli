@@ -181,7 +181,7 @@ export class VintedClient {
       }
 
       const json = (await res.json()) as T;
-      if (ttl > 0) this.cache.set(cacheKey, json);
+      if (ttl > 0) this.cache.set(cacheKey, json, ttl);
       return json;
     }
 
