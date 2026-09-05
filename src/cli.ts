@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { readFileSync } from 'node:fs';
 import { Command, Option } from 'commander';
 import { VintedClient } from './client/session.js';
 import { COUNTRIES, type Condition, type Country, type SortBy } from './client/types.js';
@@ -133,14 +134,25 @@ program
   });
 
 program
-  .command('seller <id>')
-  .description('Get seller profile by ID')
+  .command('seller <ids>')
+  .description('Get seller profile(s) by ID. Comma-separated IDs share one session (one bootstrap).')
   .addOption(new Option('-c, --country <cc>', 'country code').choices(COUNTRIES).default('fr'))
-  .action(async (id: string, o, cmd) => {
+  .action(async (ids: string, o, cmd) => {
     try {
       const g = cmd.optsWithGlobals();
-      const r = await opGetSeller(client(g), { sellerId: Number(id), country: o.country as Country });
-      out(r, g.output);
+      const idList = String(ids).split(',').map((s) => Number(s.trim())).filter((n) => Number.isFinite(n) && n > 0);
+      if (!idList.length) throw new Error('sellerId is required');
+      const c = client(g);
+      const country = o.country as Country;
+      if (idList.length === 1) {
+        out(await opGetSeller(c, { sellerId: idList[0], country }), g.output);
+        return;
+      }
+      const sellers = [];
+      for (const sellerId of idList) {
+        sellers.push(await opGetSeller(c, { sellerId, country }));
+      }
+      out({ sellers }, g.output);
     } catch (e) { fail(e); }
   });
 
@@ -228,6 +240,122 @@ program
         limit: o.limit,
       });
       out(r, g.output);
+    } catch (e) { fail(e); }
+  });
+
+program
+  .command('batch')
+  .description('Run searches, seller profiles, and closets in one session (one Cloudflare bootstrap).')
+  .action(async (_o, cmd) => {
+    try {
+      const g = cmd.optsWithGlobals();
+      const raw = readFileSync(0, 'utf8').trim();
+      if (!raw) throw new Error('batch requires a JSON plan on stdin');
+      const plan = JSON.parse(raw) as {
+        searches?: Array<{
+          name?: string;
+          query: string;
+          country?: Country;
+          sort?: SortBy;
+          limit?: number;
+          page?: number;
+          priceMin?: number;
+          priceMax?: number;
+          brandIds?: number[];
+          categoryId?: number;
+          sizeIds?: number[];
+          condition?: Condition[];
+          all?: boolean;
+          maxItems?: number;
+          maxPages?: number;
+        }>;
+        sellers?: { country?: Country; ids?: number[] };
+        closets?: { country?: Country; ids?: number[]; limit?: number };
+        items?: Array<{ id: number; country?: Country; url?: string }>;
+      };
+      const c = client(g);
+      const searches: Array<{ name: string; items: unknown[]; error: string | null }> = [];
+      for (const s of plan.searches ?? []) {
+        try {
+          const params = {
+            query: s.query,
+            country: (s.country ?? 'fr') as Country,
+            sortBy: s.sort,
+            perPage: s.limit ?? 24,
+            page: s.page ?? 1,
+            priceMin: s.priceMin,
+            priceMax: s.priceMax,
+            brandIds: s.brandIds,
+            categoryId: s.categoryId,
+            sizeIds: s.sizeIds,
+            condition: s.condition,
+          };
+          const r = s.all
+            ? await opSearchAll(c, {
+                ...params,
+                perPage: Math.min(s.limit ?? 96, 100),
+                maxItems: s.maxItems ?? 1000,
+                maxPages: s.maxPages ?? 25,
+              })
+            : await opSearch(c, params);
+          searches.push({ name: s.name ?? s.query, items: r.items, error: null });
+        } catch (e) {
+          searches.push({
+            name: s.name ?? s.query,
+            items: [],
+            error: e instanceof Error ? e.message : String(e),
+          });
+        }
+      }
+      const sellers: unknown[] = [];
+      const sellerCountry = (plan.sellers?.country ?? 'ro') as Country;
+      for (const id of plan.sellers?.ids ?? []) {
+        try {
+          sellers.push(await opGetSeller(c, { sellerId: id, country: sellerCountry }));
+        } catch (e) {
+          sellers.push({
+            id,
+            error: e instanceof Error ? e.message : String(e),
+          });
+        }
+      }
+      const closets: Array<{ sellerId: number; items: unknown[]; error: string | null }> = [];
+      const closetCountry = (plan.closets?.country ?? 'ro') as Country;
+      const closetLimit = plan.closets?.limit ?? 12;
+      for (const id of plan.closets?.ids ?? []) {
+        try {
+          const r = await opSellerItems(c, {
+            sellerId: id,
+            country: closetCountry,
+            limit: closetLimit,
+          });
+          closets.push({ sellerId: id, items: r.items, error: null });
+        } catch (e) {
+          closets.push({
+            sellerId: id,
+            items: [],
+            error: e instanceof Error ? e.message : String(e),
+          });
+        }
+      }
+      const items: Array<{ id: number; available: boolean; item?: unknown; error?: string }> = [];
+      for (const spec of plan.items ?? []) {
+        try {
+          const r = await opGetItem(c, {
+            itemId: spec.id,
+            url: spec.url,
+            country: (spec.country ?? 'ro') as Country,
+          });
+          items.push({ id: Number(r.id ?? spec.id), available: true, item: r });
+        } catch (e) {
+          items.push({
+            id: spec.id,
+            available: false,
+            error: e instanceof Error ? e.message : String(e),
+          });
+        }
+      }
+      out({ searches, sellers, closets, items }, 'json');
     } catch (e) { fail(e); }
   });
 
