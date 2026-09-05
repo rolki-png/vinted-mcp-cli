@@ -209,14 +209,15 @@ export async function getSellerItems(
   perPage = 20,
   page = 1,
 ): Promise<SearchResult> {
+  // catalog/items?seller_id= is ignored by Vinted and returns unrelated catalog
+  // hits — use the wardrobe endpoint instead.
   const qs = new URLSearchParams();
-  qs.set('seller_id', String(sellerId));
   qs.set('per_page', String(Math.min(perPage, 100)));
   qs.set('page', String(page));
   qs.set('order', 'newest_first');
   const data = await client.apiGet<{ items: any[]; pagination?: { total_entries?: number } }>(
     country,
-    `/api/v2/catalog/items?${qs.toString()}`,
+    `/api/v2/wardrobe/${sellerId}/items?${qs.toString()}`,
   );
   const items: Item[] = (data.items ?? []).map((i) => ({
     id: Number(i.id),
@@ -229,7 +230,10 @@ export async function getSellerItems(
     url: i.url ?? `https://${DOMAIN[country]}/items/${i.id}`,
     favouriteCount: i.favourite_count,
     photoUrl: i.photo?.url ?? i.photos?.[0]?.url,
-    seller: { id: sellerId, username: String(i.user?.login ?? '') },
+    seller: {
+      id: Number(i.user?.id ?? sellerId),
+      username: String(i.user?.login ?? i.user?.username ?? ''),
+    },
   }));
   return { totalCount: data.pagination?.total_entries ?? items.length, page, items };
 }

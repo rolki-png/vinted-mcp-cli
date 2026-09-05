@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 
 import {
-  searchItems, getItem, getSeller, searchSlim,
+  searchItems, getItem, getSeller, getSellerItems, searchSlim,
 } from '../dist/client/endpoints.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -67,6 +67,31 @@ test('getSeller maps payload', async () => {
   assert.equal(r.itemCount, 42);
   assert.equal(r.feedbackReputation, 0.98);
   assert.equal(r.profileUrl, 'https://www.vinted.fr/member/5001');
+});
+
+test('getSellerItems uses wardrobe endpoint not catalog seller_id', async () => {
+  const c = new FakeClient({
+    '/api/v2/wardrobe/5001/items': {
+      items: [
+        {
+          id: 42,
+          title: 'Tee',
+          price: { amount: '12.00', currency_code: 'EUR' },
+          brand_title: 'Nike',
+          size_title: 'M',
+          user: { id: 5001, login: 'alice' },
+        },
+      ],
+      pagination: { total_entries: 1 },
+    },
+  });
+  const r = await getSellerItems(c, 5001, 'fr', 20, 1);
+  assert.equal(r.items.length, 1);
+  assert.equal(r.items[0].id, 42);
+  assert.equal(r.items[0].seller.id, 5001);
+  assert.equal(r.items[0].seller.username, 'alice');
+  assert.match(c.calls[0].path, /^\/api\/v2\/wardrobe\/5001\/items\?/);
+  assert.doesNotMatch(c.calls[0].path, /catalog\/items/);
 });
 
 test('searchSlim filters non-numeric prices', async () => {
