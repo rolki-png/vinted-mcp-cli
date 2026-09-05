@@ -103,13 +103,21 @@ async function getItemFromHtml(
   if (!ldMatch) throw new Error(`Item ${itemId}: no JSON-LD on page`);
   const ld = JSON.parse(ldMatch[1]);
 
-  // Scrape seller id + username from member links in HTML
+  // Prefer id-username slug; fall back to bare /member/{id} (common on gated pages).
   let sellerUsername = '';
   let sellerId = 0;
-  const sellerMatch = body.match(/\/member\/(\d+)-([^"'/?&#\s]+)/);
+  const sellerMatch = body.match(/\/member\/(\d+)(?:-([^"'/?&#\s]+))?/);
   if (sellerMatch) {
     sellerId = Number(sellerMatch[1]);
-    sellerUsername = sellerMatch[2];
+    sellerUsername = sellerMatch[2] || '';
+  }
+  if (sellerId && !sellerUsername) {
+    try {
+      const profile = await getSeller(client, sellerId, country);
+      sellerUsername = profile.username || '';
+    } catch {
+      // Keep id-only; caller can still link to /member/{id}.
+    }
   }
 
   return {
