@@ -2,8 +2,14 @@ import { VintedClient } from '../client/session.js';
 import { searchItems } from '../client/endpoints.js';
 import type { SearchParams, SearchResult } from '../client/types.js';
 
+function assertSearchTarget(p: SearchParams): void {
+  if (p.query?.trim()) return;
+  if (p.brandIds?.length || p.categoryId || p.sizeIds?.length) return;
+  throw new Error('query is required');
+}
+
 export async function opSearch(client: VintedClient, p: SearchParams): Promise<SearchResult> {
-  if (!p.query?.trim()) throw new Error('query is required');
+  assertSearchTarget(p);
   return searchItems(client, p);
 }
 
@@ -11,7 +17,7 @@ export async function opSearchAll(
   client: VintedClient,
   p: SearchParams & { maxItems?: number; maxPages?: number },
 ): Promise<SearchResult> {
-  if (!p.query?.trim()) throw new Error('query is required');
+  assertSearchTarget(p);
   const perPage = Math.min(p.perPage ?? 96, 100);
   const maxItems = p.maxItems ?? 1000;
   const maxPages = p.maxPages ?? 25;

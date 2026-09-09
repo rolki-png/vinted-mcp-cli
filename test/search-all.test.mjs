@@ -38,6 +38,16 @@ test('opSearchAll stops on empty page', async () => {
   assert.equal(r.items.length, 2);
 });
 
+test('opSearchAll allows empty query when brandIds are set', async () => {
+  const c = makePages([[1, 2]]);
+  const r = await opSearchAll(c, { query: '', brandIds: [5975], perPage: 2 });
+  assert.equal(r.items.length, 2);
+});
+
+test('opSearchAll still requires query without catalog filters', async () => {
+  await assert.rejects(() => opSearchAll(makePages([[1]]), { query: '' }), /query is required/);
+});
+
 test('opSearchAll stops when no new items added (loop guard)', async () => {
   const c = makePages([[1, 2, 3], [1, 2, 3]]);
   const r = await opSearchAll(c, { query: 'x', perPage: 3 });

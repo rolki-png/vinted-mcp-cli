@@ -44,6 +44,14 @@ test('searchItems maps payload + builds query', async () => {
   assert.match(path, /per_page=50/);
 });
 
+test('searchItems brand-only omits search_text', async () => {
+  const c = new FakeClient({ '/api/v2/catalog/items': fx('search.json') });
+  await searchItems(c, { query: '', country: 'ro', brandIds: [5975] });
+  const path = c.calls[0].path;
+  assert.equal(path.includes('search_text='), false);
+  assert.match(path, /brand_ids=5975/);
+});
+
 test('searchItems clamps perPage to 100', async () => {
   const c = new FakeClient({ '/api/v2/catalog/items': fx('search.json') });
   await searchItems(c, { query: 'x', perPage: 999 });

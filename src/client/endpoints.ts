@@ -6,7 +6,7 @@ import { VintedClient } from './session.js';
 
 function buildSearchPath(p: SearchParams): string {
   const qs = new URLSearchParams();
-  qs.set('search_text', p.query);
+  if (p.query?.trim()) qs.set('search_text', p.query.trim());
   qs.set('page', String(p.page ?? 1));
   qs.set('per_page', String(Math.min(p.perPage ?? 20, 100)));
   qs.set('order', SORT_VALUE[p.sortBy ?? 'relevance']);
